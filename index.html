@@ -267,7 +267,7 @@
         </div>
 
         <div class="leaderboard" id="leaderboardSection" style="display: none;">
-            <h3>🏆 Global Leaderboard</h3>
+            <h3>🏆 Leaderboard</h3>
             <ul class="leaderboard-list" id="leaderboardList"></ul>
         </div>
 
@@ -511,95 +511,46 @@
             document.getElementById('nameInput').style.display = 'flex';
             document.getElementById('leaderboardSection').style.display = 'none';
             
-            // Only clear and focus if it's a fresh game over
-            const nameInput = document.getElementById('playerName');
-            if (!nameInput.value || nameInput.value === '') {
-                nameInput.value = '';
-            }
-            
-            console.log("Game Over triggered - screen should be visible");
+            console.log("Game Over triggered");
         }
 
-        async function submitScore() {
+        function submitScore() {
             const nameInput = document.getElementById('playerName');
             const playerName = nameInput.value.trim() || 'Anonymous';
             
-            // Get submit button properly
+            // Get submit button
             const submitBtn = document.querySelector('.name-input button');
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Submitting...';
+            submitBtn.textContent = 'Saving...';
             
-            console.log('Starting score submission...');
+            // Get existing leaderboard from localStorage
+            const localData = localStorage.getItem('snake-leaderboard');
+            let leaderboard = localData ? JSON.parse(localData) : [];
             
-            let leaderboard = [];
-            let useLocalStorage = false;
+            // Add new score
+            leaderboard.push({
+                name: playerName,
+                score: score,
+                date: new Date().toLocaleDateString()
+            });
             
-            try {
-                // Try to get from shared storage first
-                console.log('Fetching from shared storage...');
-                const result = await window.storage.get('snake-global-leaderboard', true);
-                leaderboard = result ? JSON.parse(result.value) : [];
-                console.log('Fetched from shared storage:', leaderboard);
-            } catch (error) {
-                // Fall back to localStorage
-                console.log('Shared storage failed, using localStorage:', error);
-                useLocalStorage = true;
-                const localData = localStorage.getItem('snake-leaderboard');
-                leaderboard = localData ? JSON.parse(localData) : [];
-            }
+            // Sort by score (highest first) and keep top 10
+            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard = leaderboard.slice(0, 10);
             
-            try {
-                // Add new score
-                leaderboard.push({
-                    name: playerName,
-                    score: score,
-                    date: new Date().toLocaleDateString()
-                });
-                
-                // Sort by score (highest first) and keep top 10
-                leaderboard.sort((a, b) => b.score - a.score);
-                leaderboard = leaderboard.slice(0, 10);
-                
-                console.log('Updated leaderboard:', leaderboard);
-                
-                // Save back to storage
-                if (useLocalStorage) {
-                    localStorage.setItem('snake-leaderboard', JSON.stringify(leaderboard));
-                    console.log('Saved to localStorage');
-                } else {
-                    console.log('Saving to shared storage...');
-                    await window.storage.set('snake-global-leaderboard', JSON.stringify(leaderboard), true);
-                    console.log('Saved to shared storage');
-                }
-                
-                // Display leaderboard
-                console.log('Displaying leaderboard...');
-                displayLeaderboard(leaderboard, playerName, useLocalStorage);
-                
-                console.log('Score submission complete!');
-                
-            } catch (error) {
-                console.error('Failed to save score:', error);
-                alert('Failed to save score: ' + error.message + '\n\nShowing local leaderboard instead.');
-                
-                // Even if save fails, show what we have
-                displayLeaderboard(leaderboard, playerName, true);
-            }
+            // Save to localStorage
+            localStorage.setItem('snake-leaderboard', JSON.stringify(leaderboard));
+            
+            // Display leaderboard
+            displayLeaderboard(leaderboard, playerName);
+            
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit';
         }
 
-        function displayLeaderboard(leaderboard, currentPlayer, isLocal = false) {
-            console.log('displayLeaderboard called with:', leaderboard, currentPlayer, isLocal);
-            
+        function displayLeaderboard(leaderboard, currentPlayer) {
             const leaderboardSection = document.getElementById('leaderboardSection');
-            const leaderboardTitle = leaderboardSection.querySelector('h3');
             const listElement = document.getElementById('leaderboardList');
-            
-            // Update title based on storage type
-            if (isLocal) {
-                leaderboardTitle.textContent = '🏆 Local Leaderboard';
-            } else {
-                leaderboardTitle.textContent = '🏆 Global Leaderboard';
-            }
             
             listElement.innerHTML = '';
             
@@ -624,28 +575,14 @@
             }
             
             // Hide name input, show leaderboard
-            console.log('Hiding name input, showing leaderboard...');
             document.getElementById('nameInput').style.display = 'none';
             leaderboardSection.style.display = 'block';
-            console.log('Leaderboard should now be visible');
         }
-
-        // Allow Enter key to submit
-        document.addEventListener('DOMContentLoaded', () => {
-            const playerNameInput = document.getElementById('playerName');
-            if (playerNameInput) {
-                playerNameInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        submitScore();
-                    }
-                });
-            }
-        });
 
         function restartGame() {
             console.log("Restarting game...");
             
-            // Explicitly hide game over screen
+            // Hide game over screen
             const gameOverDiv = document.getElementById('gameOver');
             gameOverDiv.classList.remove('show');
             gameOverDiv.style.display = 'none';
@@ -653,15 +590,9 @@
             // Reset UI states
             document.getElementById('nameInput').style.display = 'flex';
             document.getElementById('leaderboardSection').style.display = 'none';
+            document.getElementById('playerName').value = '';
             
-            // Re-enable submit button
-            const submitButtons = document.querySelectorAll('.name-input button');
-            submitButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.textContent = 'Submit';
-            });
-            
-            // Reset game state completely
+            // Reset game state
             snake = [{ x: 10, y: 10 }];
             obstacles = [];
             floatingBomb = { 
@@ -682,8 +613,6 @@
             
             // Draw initial state
             draw();
-            
-            console.log("Game reset complete, ready to start");
         }
 
         // Keyboard controls
@@ -718,6 +647,18 @@
                 case 'D':
                     if (dx === 0) { dx = 1; dy = 0; }
                     break;
+            }
+        });
+
+        // Allow Enter key to submit
+        document.addEventListener('DOMContentLoaded', () => {
+            const playerNameInput = document.getElementById('playerName');
+            if (playerNameInput) {
+                playerNameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        submitScore();
+                    }
+                });
             }
         });
 
